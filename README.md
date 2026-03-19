@@ -1,2 +1,2 @@
 # Draft Lab
-Draft lab is a fantasy football pre-draft research tool. It allows users to participate in mock drafts, 
+Draft lab is a fantasy football pre-draft research tool. It stores data on all mock drafts and allows users to filter their past mock drafts by different draft strategies and analyze the results.
