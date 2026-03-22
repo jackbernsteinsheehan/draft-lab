@@ -1,0 +1,2 @@
+DRAFT_TYPE = "snake"
+NUM_TEAMS = 10
