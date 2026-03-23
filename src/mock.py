@@ -15,8 +15,11 @@ class DraftBoard():
         names = players['display_name']
         return names
     
+    def initialize_players(self):
+        self.players = self.get_players()
+
     def populate_players(self, players: list):
-        """set the availale players list"""
+        """set the availale players list to the players param"""
         self.available_players = players
 
     def create_team(self, name: str):
@@ -26,7 +29,7 @@ class DraftBoard():
         else:
             return "Team name already in use"
 
-    def pick_player(self, player:str, team:str):
+    def process_pick(self, player:str, team:str):
         """Allow a team to choose a player from available_players 
         and move the player to their roster"""
         if player in self.available_players:
@@ -36,3 +39,12 @@ class DraftBoard():
 
             except KeyError:
                 return "team not found"
+            
+    def _pick_player(self):
+        pass
+        
+class Player:
+    def __init__(self, name, pos):
+        self.name = name
+        self.pos = pos
+
