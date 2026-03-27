@@ -1,4 +1,4 @@
-from api import *
+from data.fetch_data import *
 import unittest
 
 class TestDraft(unittest.TestCase):

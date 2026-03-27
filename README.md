@@ -15,3 +15,11 @@ Draft lab is a fantasy football pre-draft research tool. It stores data on all m
 pip3 install nflreadpy
 pip3 install pandas
 ```
+
+
+## Stack
+- Data will be periodically pulled from nflreadpy and loaded into SQL db
+- At the start of every mock draft, current data will fetched from the SQL db and usd to populate the draft
+- Draft history for each user will be stored in SQL
+- Drafts will be classified by different draft strategies (2 RB, 2 WR, early QB, early TE)
+    - There is an open source project (can't find it now) that does this classification

@@ -11,7 +11,8 @@ class DraftBoard():
         self.current_teams: dict[str, list[str]] = {}
         
     def get_players(self) -> list:
-        """get a list of all nfl players"""
+        """get a list of all nfl players
+        Needs to be changed to get data out of the SQL db"""
         players = nfl.load_players()
         names = players['display_name']
         return names
