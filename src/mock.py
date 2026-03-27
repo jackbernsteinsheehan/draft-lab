@@ -1,6 +1,7 @@
 import nflreadpy as nfl
 import pandas as pd
 
+
 class DraftBoard():
     def __init__(self, num_teams, num_rounds):
         self.num_teams = num_teams
