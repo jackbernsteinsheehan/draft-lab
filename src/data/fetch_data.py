@@ -4,7 +4,7 @@ import pandas as pd
 
 def get_player_names(year: int):
     """Pull all player names from nflreadpy"""
-
+    
     rosters = nfl.load_rosters(year).to_pandas()
     players = rosters["full_name"]
     result = []
