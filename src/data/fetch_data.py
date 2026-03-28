@@ -174,7 +174,6 @@ def get_draft_info(roster_year, stats_year):
     draft_pool = filter_active(snapshot)
     return draft_pool
 
-
 if __name__ == "__main__":
     data = get_draft_info(roster_year=2026, stats_year=2025)
-    print(data.columns)
+    print(data)
