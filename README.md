@@ -25,3 +25,16 @@ https://nflreadpy.nflverse.com/
 - Draft history for each user will be stored in SQL
 - Drafts will be classified by different draft strategies (2 RB, 2 WR, early QB, early TE)
     - There is an open source project that does this classification: https://github.com/faverogian/nfl-fantasim
+
+
+# Data
+
+Fetch data from API and clean it
+upload it to sql db
+
+
+### Player Data to be saved:
+player_name, ranking by position, average draft position (adp), 
+
+### User mock draft data to be saved:
+draft_id, draft_strategy, total_projected_points
