@@ -1,5 +1,10 @@
 # Fetch Layer
 
+## Related Docs
+- [Data Schema Proposal](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/data.md)
+- [Players Table](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/players.md)
+- [Update Strategy](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/updates.md)
+
 ## Purpose
 [`fetch_data.py`](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/src/data/fetch_data.py) is responsible for pulling player data from `nflreadpy` and converting it into clean payloads that match the fields expected by the database connection layer.
 

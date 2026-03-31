@@ -218,33 +218,65 @@ class Connection:
 
         return int(self.cursor.lastrowid)
     
-    
-    
-def query_delete_table(self, table, conditions=None):
+    def get_table_data(self, table: str) -> list[dict[str, int]]:
         '''
-        This method has been tested. It works.
+        This method has been tested. It works. Still need to decide how we want the data to be formatted.
 
-        Deletes a specified table. Again, allow for OPTIONAL filtering conditions. 
+        Returns ALL of the information contained in a table. Return data looks like this: 
+
+        [{'id': 1, 'ticker': 'IBM', 'metric': 'open', 'mean': 5.5, 'median': 5.5, 'std': 5.5, 
+        'low': 5.5, 'max': 5.5, 'count': 3, 'standing': 'good'}, 
+        {'id': 2, 'ticker': 'IBM', 'metric': 'high', 'mean': 5.5, 'median': 5.5, 'std': 5.5, 
+        'low': 5.5, 'max': 5.5, 'count': 3, 'standing': 'good'}
         '''
         try:
-            if isinstance(conditions, str):
-                sql = f'DROP TABLE `{table}` WHERE {conditions};'
-                self.cursor.execute(sql)
-                self.conn.commit()
-                new_table_list = self.show_tables()
-                return f'Table deleted: {table}. Current tables are: {new_table_list}.'
+            sql = f'SELECT * FROM {table}'
+            self.cursor.execute(sql)
+            rows = self.cursor.fetchall()
 
-            if not isinstance(conditions, str):
-                sql = f'DROP TABLE `{table}`;'
-                self.cursor.execute(sql)
-                self.conn.commit()
-                new_table_list = self.show_tables()
-                return f'Table deleted: {table}. Current tables are: {new_table_list}.'
+            # How do we want the data?
+            '''
+            for row in rows:
+                row_id = row['id']
+                ticker = row['ticker']
+                metric = row['metric']
+                mean = row['mean']
+                median = row['median']
+                std = row['std']
+                low = row['low']
+                maximum = row['maximum']
+                count = row['count']
+                standing = row['standing']
+            '''
+            return rows
+        except Exception as e:
+            return e
+    
+    def delete_table(self, table, conditions=None):
+            '''
+            This method has been tested. It works.
 
-        except mysql.connector.Error as error:
-                    return f'DB error: {error}'
-        except Exception as error:
-            return f'There was an error: {error}'
+            Deletes a specified table. Again, allow for OPTIONAL filtering conditions. 
+            '''
+            try:
+                if isinstance(conditions, str):
+                    sql = f'DROP TABLE `{table}` WHERE {conditions};'
+                    self.cursor.execute(sql)
+                    self.conn.commit()
+                    new_table_list = self.show_tables()
+                    return f'Table deleted: {table}. Current tables are: {new_table_list}.'
+
+                if not isinstance(conditions, str):
+                    sql = f'DROP TABLE `{table}`;'
+                    self.cursor.execute(sql)
+                    self.conn.commit()
+                    new_table_list = self.show_tables()
+                    return f'Table deleted: {table}. Current tables are: {new_table_list}.'
+
+            except mysql.connector.Error as error:
+                        return f'DB error: {error}'
+            except Exception as error:
+                return f'There was an error: {error}'
 
 
 if __name__ == "__main__":

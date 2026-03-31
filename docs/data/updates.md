@@ -1,5 +1,10 @@
 # Update Strategy
 
+## Related Docs
+- [Data Schema Proposal](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/data.md)
+- [Players Table](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/players.md)
+- [Fetch Layer](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/fetch.md)
+
 ## Goal
 Keep player data current without depending on a single API to provide a perfect stream of every roster, injury, or ranking change.
 

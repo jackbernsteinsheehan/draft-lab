@@ -138,6 +138,10 @@ def build_player_payloads(roster_year: int) -> list[dict]:
     """
     player_frame = fetch_player_table_source(roster_year)
     payload_frame = player_frame.loc[:, PLAYER_DB_FIELDS].copy()
+
+    # Convert pandas missing values (NaN, <NA>, NaT) into Python None
+    payload_frame = payload_frame.astype(object).where(pd.notna(payload_frame), None)
+
     return payload_frame.to_dict(orient="records")
 
 

@@ -1,5 +1,10 @@
 # Data Schema Proposal
 
+## Related Docs
+- [Players Table](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/players.md)
+- [Fetch Layer](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/fetch.md)
+- [Update Strategy](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/updates.md)
+
 ## Goals
 - Store a clean player pool for mock drafts.
 - Store fantasy-relevant rankings and projections that change over time.

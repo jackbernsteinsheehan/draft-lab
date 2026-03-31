@@ -1,5 +1,10 @@
 # Players Table
 
+## Related Docs
+- [Data Schema Proposal](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/data.md)
+- [Fetch Layer](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/fetch.md)
+- [Update Strategy](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/updates.md)
+
 ## Purpose
 The `players` table is the app-owned source of truth for player identity inside the database.
 
