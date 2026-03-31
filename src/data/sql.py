@@ -8,6 +8,18 @@ load_dotenv()
 
 
 class Connection:
+    PLAYER_FIELDS = (
+        "canonical_name",
+        "normalized_name",
+        "primary_position",
+        "current_team",
+        "jersey_number",
+        "birth_date",
+        "rookie_year",
+        "years_exp",
+        "is_active",
+    )
+
     PLAYER_UPDATE_FIELDS = (
         "canonical_name",
         "normalized_name",
@@ -167,6 +179,73 @@ class Connection:
         self.conn.commit()
 
         return self.cursor.rowcount > 0
+
+    def insert_player(self, data: dict) -> int:
+        """
+        Insert a single player row using a pre-cleaned payload from the fetch layer.
+
+        Returns the newly created `player_id`.
+        """
+        if not isinstance(data, dict) or not data:
+            raise ValueError("data must be a non-empty dict")
+
+        insert_fields = {
+            key: value for key, value in data.items() if key in self.PLAYER_FIELDS
+        }
+        if not insert_fields:
+            raise ValueError("data must include at least one valid player column")
+
+        required_fields = {"canonical_name", "normalized_name"}
+        missing_required_fields = [
+            field for field in required_fields if field not in insert_fields
+        ]
+        if missing_required_fields:
+            raise ValueError(
+                "missing required player fields: "
+                + ", ".join(sorted(missing_required_fields))
+            )
+
+        columns = ", ".join(insert_fields.keys())
+        placeholders = ", ".join(["%s"] * len(insert_fields))
+        query = f"""
+        INSERT INTO players ({columns})
+        VALUES ({placeholders})
+        """
+
+        params = tuple(insert_fields.values())
+        self.cursor.execute(query, params)
+        self.conn.commit()
+
+        return int(self.cursor.lastrowid)
+    
+    
+    
+def query_delete_table(self, table, conditions=None):
+        '''
+        This method has been tested. It works.
+
+        Deletes a specified table. Again, allow for OPTIONAL filtering conditions. 
+        '''
+        try:
+            if isinstance(conditions, str):
+                sql = f'DROP TABLE `{table}` WHERE {conditions};'
+                self.cursor.execute(sql)
+                self.conn.commit()
+                new_table_list = self.show_tables()
+                return f'Table deleted: {table}. Current tables are: {new_table_list}.'
+
+            if not isinstance(conditions, str):
+                sql = f'DROP TABLE `{table}`;'
+                self.cursor.execute(sql)
+                self.conn.commit()
+                new_table_list = self.show_tables()
+                return f'Table deleted: {table}. Current tables are: {new_table_list}.'
+
+        except mysql.connector.Error as error:
+                    return f'DB error: {error}'
+        except Exception as error:
+            return f'There was an error: {error}'
+
 
 if __name__ == "__main__":
     con = Connection()

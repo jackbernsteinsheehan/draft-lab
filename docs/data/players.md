@@ -66,7 +66,48 @@ This table alone is not enough to safely merge players across every outside data
 The next table to add should be `player_external_ids`, which will let imports match players more reliably using provider-specific IDs like `gsis_id`.
 
 ## Connection API
-The database layer currently exposes a player update method in [`sql.py`](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/src/data/sql.py):
+The database layer currently exposes single-row insert and update methods in [`sql.py`](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/src/data/sql.py).
+
+### `insert_player`
+
+```python
+insert_player(data: dict) -> int
+```
+
+Behavior:
+- expects `data` to already be cleaned by the fetch/import layer
+- inserts one player row
+- requires `canonical_name` and `normalized_name`
+- returns the newly created internal `player_id`
+- ignores keys that are not approved player columns
+
+Allowed insert fields:
+- `canonical_name`
+- `normalized_name`
+- `primary_position`
+- `current_team`
+- `jersey_number`
+- `birth_date`
+- `rookie_year`
+- `years_exp`
+- `is_active`
+
+Example:
+
+```python
+player_id = con.insert_player(
+    {
+        "canonical_name": "Aaron Rodgers",
+        "normalized_name": "aaron rodgers",
+        "primary_position": "QB",
+        "current_team": "PIT",
+        "years_exp": 21,
+        "is_active": True,
+    },
+)
+```
+
+### `update_player_data`
 
 ```python
 update_player_data(player_id: int, data: dict) -> bool
