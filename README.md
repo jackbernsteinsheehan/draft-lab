@@ -28,13 +28,13 @@ https://nflreadpy.nflverse.com/
 
 
 # Data
+Current pipeline:
+- pull data from nflreadpy and clean it
+- load data to sql
 
-Fetch data from API and clean it
-upload it to sql db
-
-
-### Player Data to be saved:
-player_name, ranking by position, average draft position (adp), 
-
-### User mock draft data to be saved:
-draft_id, draft_strategy, total_projected_points
+TODO
+- Get rankings from a different API and map players to my player_id in sql
+- build player identification table
+- build mock draft data tables
+- build mock draft engine
+- build api for mock drafts
