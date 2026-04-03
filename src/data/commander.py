@@ -4,6 +4,6 @@ from sql import Connection
 
 db = Connection()
 
-print(len(db.get_table_data("players")))
+print(db.get_table_data("players"))
 
 db.close()
