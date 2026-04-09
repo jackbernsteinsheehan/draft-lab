@@ -22,7 +22,7 @@ pip3 install pandas
 ## Stack
 - Data will be periodically pulled from nflreadpy and loaded into SQL db
 https://nflreadpy.nflverse.com/
-- Flask for API
+- FastAPI for API
 - At the start of every mock draft, current data will fetched from the SQL db and usd to populate the draft
 - Draft history for each user will be stored in SQL
 - Drafts will be classified by different draft strategies (2 RB, 2 WR, early QB, early TE)
