@@ -34,9 +34,11 @@ Current pipeline:
 - pull data from nflreadpy and clean it
 - load data to sql
 
-TODO
+# TODO
 - Get rankings from a different API and map players to my player_id in sql
 - build player identification table
 - build mock draft data tables
 - build mock draft engine
+- build a table to classify draft strategies
 - build api for mock drafts
+- build UI/UX
