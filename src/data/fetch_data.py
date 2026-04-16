@@ -2,7 +2,7 @@ import nflreadpy as nfl
 import pandas as pd
 
 """
-Main is build_player_payloads(roster_year)"""
+point of access is is build_player_payloads(roster_year)"""
 
 
 PLAYER_DB_FIELDS = (
