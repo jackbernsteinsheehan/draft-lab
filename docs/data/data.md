@@ -1,4 +1,4 @@
-# Data Schema Proposal
+# Data Schema
 
 ## Related Docs
 - [Players Table](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/players.md)
