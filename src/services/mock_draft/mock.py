@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 import nflreadpy as nfl
 import pandas as pd
@@ -53,6 +53,56 @@ class DraftBoard:
 
     def _pick_player(self):
         pass
+
+
+# ____________________ Draft Driver ____________________ #
+
+def snake_order(draft_order: list[str], num_rounds: int) -> Iterator[tuple[int, int, str]]:
+    """Yield (overall_pick, round, team) for a snake draft.
+
+    Round 1 walks `draft_order` forward, round 2 reverses, and so on.
+    """
+    overall = 0
+    for rnd in range(1, num_rounds + 1):
+        slots = draft_order if rnd % 2 == 1 else list(reversed(draft_order))
+        for team in slots:
+            overall += 1
+            yield overall, rnd, team
+
+
+def run_draft(
+    board: DraftBoard,
+    draft_order: list[str],
+    user_team: str,
+    cpu_pick_fn: Callable[[DraftBoard, str], int],
+    user_pick_fn: Callable[[DraftBoard, str, int, int], int],
+) -> None:
+    """Drive a snake draft to completion.
+
+    `draft_order` is the list of team names in slot order (slot 1 .. slot N).
+    Every team in `draft_order` must already exist on the board.
+    `cpu_pick_fn(board, team) -> player_id` chooses a CPU pick.
+    `user_pick_fn(board, team, overall_pick, round) -> player_id` chooses the user's pick.
+    Both functions must return an available `player_id`; `process_pick` enforces it.
+    """
+    if user_team not in draft_order:
+        raise ValueError(f"user_team {user_team!r} not in draft_order")
+    if len(set(draft_order)) != len(draft_order):
+        raise ValueError("draft_order contains duplicate team names")
+    missing = [t for t in draft_order if t not in board.current_teams]
+    if missing:
+        raise KeyError(f"teams not on board: {missing}")
+    if len(draft_order) != board.num_teams:
+        raise ValueError(
+            f"draft_order has {len(draft_order)} teams, board expects {board.num_teams}"
+        )
+
+    for overall, rnd, team in snake_order(draft_order, board.num_rounds):
+        if team == user_team:
+            pid = user_pick_fn(board, team, overall, rnd)
+        else:
+            pid = cpu_pick_fn(board, team)
+        board.process_pick(pid, team)
 
 
 # ____________________ Loaders ____________________ #
