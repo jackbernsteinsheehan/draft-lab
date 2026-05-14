@@ -121,6 +121,76 @@ class Connection:
         """
         self.execute(query)
 
+    def create_player_external_ids_table(self) -> None:
+        """Create the mapping table between internal player_id and provider IDs."""
+        query = """
+        CREATE TABLE IF NOT EXISTS player_external_ids (
+            player_id BIGINT NOT NULL,
+            provider VARCHAR(32) NOT NULL,
+            external_id VARCHAR(64) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (player_id, provider),
+            UNIQUE KEY uq_provider_external_id (provider, external_id),
+            KEY idx_player_external_ids_player_id (player_id),
+            CONSTRAINT fk_player_external_ids_player
+                FOREIGN KEY (player_id) REFERENCES players (player_id)
+                ON DELETE CASCADE
+        )
+        """
+        self.execute(query)
+
+    # ___________________ player_external_ids Methods ___________________ #
+
+    def upsert_external_id(
+        self, player_id: int, provider: str, external_id: str
+    ) -> None:
+        """Insert or update the external id for a (player_id, provider) pair."""
+        if not isinstance(player_id, int):
+            raise ValueError("player_id must be an int")
+        if not isinstance(provider, str) or not provider:
+            raise ValueError("provider must be a non-empty string")
+        if not isinstance(external_id, str) or not external_id:
+            raise ValueError("external_id must be a non-empty string")
+
+        query = """
+        INSERT INTO player_external_ids (player_id, provider, external_id)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE external_id = VALUES(external_id)
+        """
+        self.execute(query, (player_id, provider, external_id))
+
+    def get_player_id_by_external(
+        self, provider: str, external_id: str
+    ) -> int | None:
+        """Look up an internal player_id from a (provider, external_id) pair."""
+        query = """
+        SELECT player_id FROM player_external_ids
+        WHERE provider = %s AND external_id = %s
+        """
+        rows = self.fetch_all(query, (provider, external_id))
+        return int(rows[0]["player_id"]) if rows else None
+
+    def get_external_ids(self, player_id: int) -> dict[str, str]:
+        """Return a {provider: external_id} map for a single player."""
+        query = """
+        SELECT provider, external_id FROM player_external_ids
+        WHERE player_id = %s
+        """
+        rows = self.fetch_all(query, (player_id,))
+        return {row["provider"]: row["external_id"] for row in rows}
+
+    def delete_external_id(self, player_id: int, provider: str) -> bool:
+        """Remove a single (player_id, provider) mapping. Returns True if a row was deleted."""
+        query = """
+        DELETE FROM player_external_ids
+        WHERE player_id = %s AND provider = %s
+        """
+        self.cursor.execute(query, (player_id, provider))
+        self.conn.commit()
+        return self.cursor.rowcount > 0
+
     def show_tables(self):
         '''
         Returns a list of all table names in the data base
@@ -284,5 +354,7 @@ if __name__ == "__main__":
     try:
         con.create_players_table()
         print("Created or verified `players` table.")
+        con.create_player_external_ids_table()
+        print("Created or verified `player_external_ids` table.")
     finally:
         con.close()

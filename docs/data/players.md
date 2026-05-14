@@ -65,10 +65,8 @@ Longer term, identity should rely primarily on:
 - internal `player_id`
 - external IDs stored in a separate `player_external_ids` table
 
-## Current Limitation
-This table alone is not enough to safely merge players across every outside data source. It is only the base identity table.
-
-The next table to add should be `player_external_ids`, which will let imports match players more reliably using provider-specific IDs like `gsis_id`.
+## External ID Mapping
+For matching players to outside data sources, see the [`player_external_ids` table](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/docs/data/player_external_ids.md). The name+team+position unique constraint above is the fallback when no provider id is available.
 
 ## Connection API
 The database layer currently exposes single-row insert and update methods in [`sql.py`](/Users/jackbernstein-sheehan/Documents/projects/draft-lab/src/data/sql.py).
