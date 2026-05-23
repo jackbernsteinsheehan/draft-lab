@@ -66,7 +66,7 @@ def main() -> int:
         return 1
 
     print(f"Fetching roster payloads for {args.year}…")
-    payloads = build_player_payloads(roster_year=args.year)
+    payloads = _coerce_ints(build_player_payloads(roster_year=args.year))
     print(f"  {len(payloads)} rows prepared")
 
     client = create_client(url, key)
