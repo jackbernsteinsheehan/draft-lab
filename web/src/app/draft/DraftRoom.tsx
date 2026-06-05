@@ -11,84 +11,240 @@ import {
   type DraftState,
   type Player,
 } from "@/lib/draft";
+import { classifyStrategy } from "@/lib/strategy";
+import { createClient } from "@/lib/supabase/client";
+import { positionBadgeClass } from "@/lib/ui";
+import { buildRoster } from "@/lib/roster";
 
 type Config = { numTeams: number; numRounds: number; userSlot: number };
+type AdpCoverage = {
+  matched: number;
+  ffcRows: number;
+  total: number;
+  source: "fantasypros" | "ffc" | "none";
+};
 
-export default function DraftRoom({ players }: { players: Player[] }) {
+export default function DraftRoom({
+  players,
+  adpCoverage,
+}: {
+  players: Player[];
+  adpCoverage?: AdpCoverage;
+}) {
   const [state, setState] = useState<DraftState | null>(null);
 
-  if (!state) return <Setup players={players} onStart={(cfg) => setState(initDraft({ ...cfg, players }))} />;
+  if (!state)
+    return (
+      <Setup
+        players={players}
+        adpCoverage={adpCoverage}
+        onStart={(cfg) => setState(initDraft({ ...cfg, players }))}
+      />
+    );
   return <LiveDraft state={state} setState={setState} onReset={() => setState(null)} />;
 }
 
-function Setup({ players, onStart }: { players: Player[]; onStart: (cfg: Config) => void }) {
+/* ──────────────────────────────────────────────────────────── Setup ─── */
+
+function Setup({
+  players,
+  adpCoverage,
+  onStart,
+}: {
+  players: Player[];
+  adpCoverage?: AdpCoverage;
+  onStart: (cfg: Config) => void;
+}) {
   const [numTeams, setNumTeams] = useState(12);
   const [numRounds, setNumRounds] = useState(15);
   const [userSlot, setUserSlot] = useState(1);
 
   return (
-    <main className="min-h-screen p-8 max-w-xl mx-auto space-y-6">
-      <h1 className="text-3xl font-semibold">Mock Draft</h1>
-      <p className="text-sm text-zinc-500">
-        {players.length} active players loaded.
-      </p>
+    <main className="max-w-2xl mx-auto px-6 py-12 space-y-6">
+      <div>
+        <h1 className="text-3xl font-semibold tracking-tight">New mock draft</h1>
+        <p className="mt-2 text-sm text-muted">
+          {players.length.toLocaleString()} active players loaded
+          {adpCoverage
+            ? ` · ${adpCoverage.matched} ADP-rated (${
+                adpCoverage.source === "fantasypros"
+                  ? "FantasyPros via nflverse"
+                  : adpCoverage.source === "ffc"
+                    ? "FantasyFootballCalculator"
+                    : "no source"
+              })`
+            : ""}
+          .
+        </p>
+        {adpCoverage && adpCoverage.matched === 0 && (
+          <p className="mt-2 text-xs text-amber-600">
+            No ADP could be matched — CPU will fall back to position need only.
+          </p>
+        )}
+      </div>
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onStart({ numTeams, numRounds, userSlot: Math.min(userSlot, numTeams) });
         }}
-        className="space-y-4"
+        className="rounded-xl border border-border bg-surface p-6 space-y-5"
       >
-        <Field label="Teams">
-          <input
-            type="number"
-            min={2}
-            max={16}
-            value={numTeams}
-            onChange={(e) => setNumTeams(Number(e.target.value))}
-            className="border rounded px-2 py-1 w-24 bg-transparent"
-          />
+        <Field label="Teams" hint="Standard leagues are 10 or 12.">
+          <NumberInput value={numTeams} min={2} max={16} onChange={setNumTeams} />
         </Field>
-        <Field label="Rounds">
-          <input
-            type="number"
-            min={1}
-            max={25}
-            value={numRounds}
-            onChange={(e) => setNumRounds(Number(e.target.value))}
-            className="border rounded px-2 py-1 w-24 bg-transparent"
-          />
+        <Field label="Rounds" hint="15 covers starters + bench in a standard league.">
+          <NumberInput value={numRounds} min={1} max={25} onChange={setNumRounds} />
         </Field>
-        <Field label="Your Slot">
-          <input
-            type="number"
-            min={1}
-            max={numTeams}
-            value={userSlot}
-            onChange={(e) => setUserSlot(Number(e.target.value))}
-            className="border rounded px-2 py-1 w-24 bg-transparent"
-          />
+        <Field label="Your slot" hint="Position in the snake order (1 = first overall).">
+          <SlotPicker numTeams={numTeams} value={userSlot} onChange={setUserSlot} />
         </Field>
-        <button
-          type="submit"
-          disabled={players.length === 0}
-          className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
-        >
-          Start Draft
-        </button>
+
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={players.length === 0}
+            className="w-full px-4 py-2.5 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90 transition disabled:opacity-40"
+          >
+            Start draft
+          </button>
+        </div>
       </form>
     </main>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <label className="flex items-center justify-between gap-4">
-      <span className="text-sm text-zinc-500">{label}</span>
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <label className="text-sm font-medium">{label}</label>
+        {hint && <span className="text-xs text-muted">{hint}</span>}
+      </div>
       {children}
-    </label>
+    </div>
   );
 }
+
+function NumberInput({
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min: number;
+  max: number;
+}) {
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="w-28 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
+    />
+  );
+}
+
+function SlotPicker({
+  numTeams,
+  value,
+  onChange,
+}: {
+  numTeams: number;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {Array.from({ length: numTeams }, (_, i) => i + 1).map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n)}
+          className={`size-8 rounded-md text-xs tabular-nums border transition ${
+            n === value
+              ? "bg-foreground text-background border-foreground"
+              : "border-border text-muted hover:bg-surface-2"
+          }`}
+        >
+          {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────── Save button ── */
+
+function SaveDraftButton({ state }: { state: DraftState }) {
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const onSave = async () => {
+    setStatus("saving");
+    setError(null);
+    const userPicks = state.picks.filter((p) => p.team === state.user_team);
+    const { primary, tags } = classifyStrategy(userPicks, state.players);
+    const supabase = createClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) {
+      setStatus("error");
+      setError("Sign in to save drafts.");
+      return;
+    }
+    const { error: insertError } = await supabase.from("drafts").insert({
+      user_id: auth.user.id,
+      num_teams: state.num_teams,
+      num_rounds: state.num_rounds,
+      user_slot: state.draft_order.indexOf(state.user_team) + 1,
+      user_team: state.user_team,
+      picks: state.picks,
+      strategy: primary,
+      strategy_tags: tags,
+    });
+    if (insertError) {
+      setStatus("error");
+      setError(insertError.message);
+      return;
+    }
+    setStatus("saved");
+  };
+
+  if (status === "saved") {
+    return (
+      <a
+        href="/analyze"
+        className="text-sm px-3 py-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      >
+        Saved — view analysis →
+      </a>
+    );
+  }
+  return (
+    <button
+      onClick={onSave}
+      disabled={status === "saving"}
+      className="text-sm px-3 py-1.5 rounded-md bg-foreground text-background hover:opacity-90 transition disabled:opacity-50"
+      title={error ?? undefined}
+    >
+      {status === "saving" ? "Saving…" : status === "error" ? "Retry save" : "Save draft"}
+    </button>
+  );
+}
+
+/* ─────────────────────────────────────────────────────── Live draft ─── */
 
 function LiveDraft({
   state,
@@ -115,6 +271,27 @@ function LiveDraft({
     return () => clearTimeout(t);
   }, [state, slot, userTurn, done, setState]);
 
+  // Stable overall rank assigned once from the initial pool, ordered by ADP.
+  // Players without ADP rank after everyone with ADP, by position priority.
+  const overallRank = useMemo(() => {
+    const posRank: Record<string, number> = { RB: 0, WR: 1, TE: 2, QB: 3, K: 4, DST: 5 };
+    const all = Object.values(state.players).slice();
+    all.sort((a, b) => {
+      const aAdp = a.adp ?? Number.POSITIVE_INFINITY;
+      const bAdp = b.adp ?? Number.POSITIVE_INFINITY;
+      if (aAdp !== bAdp) return aAdp - bAdp;
+      const aPos = posRank[a.position] ?? 99;
+      const bPos = posRank[b.position] ?? 99;
+      if (aPos !== bPos) return aPos - bPos;
+      return a.name.localeCompare(b.name);
+    });
+    const map: Record<number, number> = {};
+    all.forEach((p, i) => {
+      map[p.player_id] = i + 1;
+    });
+    return map;
+  }, [state.players]);
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const list: Player[] = [];
@@ -124,10 +301,14 @@ function LiveDraft({
       if (q && !p.name.toLowerCase().includes(q)) continue;
       list.push(p);
     }
+    const posRank: Record<string, number> = { RB: 0, WR: 1, TE: 2, QB: 3, K: 4, DST: 5 };
     list.sort((a, b) => {
       const aAdp = a.adp ?? Number.POSITIVE_INFINITY;
       const bAdp = b.adp ?? Number.POSITIVE_INFINITY;
       if (aAdp !== bAdp) return aAdp - bAdp;
+      const aPos = posRank[a.position] ?? 99;
+      const bPos = posRank[b.position] ?? 99;
+      if (aPos !== bPos) return aPos - bPos;
       return a.name.localeCompare(b.name);
     });
     return list.slice(0, 200);
@@ -135,86 +316,130 @@ function LiveDraft({
 
   const order = snakeOrder(state.draft_order, state.num_rounds);
 
-  return (
-    <main className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto space-y-4">
-      <header className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Mock Draft</h1>
-          <p className="text-sm text-zinc-500">
-            {done
-              ? "Draft complete."
-              : slot
-                ? `Round ${slot.round}, Pick ${slot.overall} — ${userTurn ? "You're on the clock" : `${slot.team} is picking…`}`
-                : ""}
-          </p>
-        </div>
-        <button onClick={onReset} className="text-sm px-3 py-1 rounded border">
-          Reset
-        </button>
-      </header>
+  // Display the pick as "round.pick-in-round" so it counts up linearly regardless of
+  // snake direction (e.g. 4.12 → 4.13 → 5.01).
+  const pickLabel = (s: { overall: number; round: number }) => {
+    const inRound = s.overall - (s.round - 1) * state.num_teams;
+    return `${s.round}.${String(inRound).padStart(2, "0")}`;
+  };
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        <section className="border rounded p-3 space-y-3">
-          <div className="flex gap-2 flex-wrap">
+  return (
+    <main className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6 space-y-4">
+      <StatusBar
+        state={state}
+        slot={slot}
+        userTurn={userTurn}
+        done={done}
+        onReset={onReset}
+        pickLabel={pickLabel}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+        {/* ── Available players ─────────────────────────────────────── */}
+        <section className="rounded-xl border border-border bg-surface overflow-hidden">
+          <div className="border-b border-border px-3 py-2.5 flex flex-wrap items-center gap-2">
             <input
               placeholder="Search players…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="border rounded px-2 py-1 flex-1 min-w-[160px] bg-transparent"
+              className="flex-1 min-w-[160px] rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
-            <select
-              value={posFilter}
-              onChange={(e) => setPosFilter(e.target.value)}
-              className="border rounded px-2 py-1 bg-transparent"
-            >
+            <div className="flex gap-1">
               {["ALL", "QB", "RB", "WR", "TE", "K", "DST"].map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <button
+                  key={p}
+                  onClick={() => setPosFilter(p)}
+                  className={`text-xs px-2 py-1 rounded-md border transition ${
+                    posFilter === p
+                      ? "bg-foreground text-background border-foreground"
+                      : "border-border text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  {p}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
-          <ul className="divide-y max-h-[60vh] overflow-auto">
+
+          <ul className="divide-y divide-border max-h-[68vh] overflow-auto scroll-thin">
             {filtered.map((p) => (
-              <li key={p.player_id} className="flex items-center justify-between py-1.5 px-1 gap-2">
-                <div className="min-w-0">
-                  <div className="truncate">{p.name}</div>
-                  <div className="text-xs text-zinc-500">
-                    {p.position} {p.team ? `· ${p.team}` : ""}
+              <li
+                key={p.player_id}
+                className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-surface-2 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xs text-muted tabular-nums w-8 text-right">
+                    {overallRank[p.player_id]}
+                  </span>
+                  <span
+                    className={`text-[10px] font-semibold tracking-wider px-1.5 py-0.5 rounded ${positionBadgeClass(p.position)}`}
+                  >
+                    {p.position}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{p.name}</div>
+                    <div className="text-xs text-muted">
+                      {p.team ?? "FA"}
+                      {p.adp != null ? ` · ADP ${p.adp.toFixed(1)}` : ""}
+                      {p.bye_week != null ? ` · Bye ${p.bye_week}` : ""}
+                    </div>
                   </div>
                 </div>
                 <button
                   disabled={!userTurn || done}
                   onClick={() => setState(processPick(state, p.player_id))}
-                  className="text-xs px-2 py-1 rounded bg-blue-600 text-white disabled:opacity-30"
+                  className="text-xs px-2.5 py-1.5 rounded-md bg-foreground text-background hover:opacity-90 transition disabled:opacity-20"
                 >
                   Draft
                 </button>
               </li>
             ))}
             {filtered.length === 0 && (
-              <li className="text-sm text-zinc-500 py-4 text-center">No matches.</li>
+              <li className="text-sm text-muted py-8 text-center">No matches.</li>
             )}
           </ul>
         </section>
 
-        <aside className="border rounded p-3 space-y-2 max-h-[70vh] overflow-auto">
-          <h2 className="text-sm font-semibold">Picks</h2>
-          <ol className="text-xs space-y-1">
+        {/* ── Pick log ──────────────────────────────────────────────── */}
+        <aside className="rounded-xl border border-border bg-surface overflow-hidden">
+          <div className="border-b border-border px-3 py-2.5 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Pick log</h2>
+            <span className="text-xs text-muted tabular-nums">
+              {state.picks.length} / {state.num_teams * state.num_rounds}
+            </span>
+          </div>
+          <ol className="text-xs max-h-[68vh] overflow-auto scroll-thin">
             {order.slice(0, state.picks.length + 1).map((s, idx) => {
               const pick = state.picks[idx];
               const player = pick ? state.players[pick.player_id] : null;
               const isCurrent = idx === state.picks.length && !done;
+              const isYou = s.team === state.user_team;
               return (
                 <li
                   key={s.overall}
-                  className={`flex justify-between gap-2 px-1 py-0.5 rounded ${
-                    isCurrent ? "bg-blue-50 dark:bg-blue-950" : ""
+                  className={`flex items-center gap-2 px-3 py-1.5 border-b border-border/60 last:border-b-0 ${
+                    isCurrent ? "bg-accent/10" : isYou ? "bg-surface-2/60" : ""
                   }`}
                 >
-                  <span className="text-zinc-500 tabular-nums w-14">
-                    {s.round}.{String(s.slot).padStart(2, "0")}
+                  <span className="text-muted tabular-nums w-12 shrink-0">
+                    {pickLabel(s)}
                   </span>
-                  <span className="flex-1 truncate">
-                    {s.team} {player ? `→ ${player.name} (${player.position})` : isCurrent ? "…" : ""}
+                  <span className="text-muted w-14 shrink-0 truncate">
+                    {s.team}
+                  </span>
+                  <span className="flex-1 min-w-0 flex items-center gap-1.5">
+                    {player ? (
+                      <>
+                        <span
+                          className={`text-[9px] font-semibold tracking-wider px-1 py-px rounded ${positionBadgeClass(player.position)}`}
+                        >
+                          {player.position}
+                        </span>
+                        <span className="truncate">{player.name}</span>
+                      </>
+                    ) : isCurrent ? (
+                      <span className="text-accent">on the clock…</span>
+                    ) : null}
                   </span>
                 </li>
               );
@@ -223,23 +448,126 @@ function LiveDraft({
         </aside>
       </div>
 
-      <section className="border rounded p-3">
-        <h2 className="text-sm font-semibold mb-2">Your Roster ({state.user_team})</h2>
-        <ul className="text-sm grid grid-cols-2 md:grid-cols-3 gap-1">
-          {state.rosters[state.user_team].map((pid) => {
-            const p = state.players[pid];
-            return (
-              <li key={pid} className="truncate">
-                <span className="text-zinc-500 w-10 inline-block">{p.position}</span>
-                {p.name}
-              </li>
-            );
-          })}
-          {state.rosters[state.user_team].length === 0 && (
-            <li className="text-zinc-500">No picks yet.</li>
-          )}
-        </ul>
-      </section>
+      {/* ── Your roster ─────────────────────────────────────────────── */}
+      <Roster state={state} />
     </main>
+  );
+}
+
+function StatusBar({
+  state,
+  slot,
+  userTurn,
+  done,
+  onReset,
+  pickLabel,
+}: {
+  state: DraftState;
+  slot: { overall: number; round: number; slot: number; team: string } | null;
+  userTurn: boolean;
+  done: boolean;
+  onReset: () => void;
+  pickLabel: (s: { overall: number; round: number }) => string;
+}) {
+  return (
+    <header className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center gap-4">
+        <div className="text-xs uppercase tracking-widest text-muted">
+          {done ? "Complete" : userTurn ? "Your turn" : "Drafting"}
+        </div>
+        {slot && !done && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-semibold tabular-nums">
+              {pickLabel(slot)}
+            </span>
+            <span className="text-sm text-muted">
+              · {userTurn ? "You're on the clock" : `${slot.team} is picking…`}
+            </span>
+          </div>
+        )}
+        {done && (
+          <div className="text-sm text-muted">Draft complete — review your roster.</div>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        {done && <SaveDraftButton state={state} />}
+        <button
+          onClick={onReset}
+          className="text-sm px-3 py-1.5 rounded-md border border-border hover:bg-surface-2 transition"
+        >
+          Reset
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function Roster({ state }: { state: DraftState }) {
+  const picks = state.rosters[state.user_team]
+    .map((pid) => state.players[pid])
+    .filter(Boolean);
+  const slots = buildRoster(picks, state.num_rounds);
+  const starters = slots.filter((s) => !s.isBench);
+  const bench = slots.filter((s) => s.isBench);
+
+  return (
+    <section className="rounded-xl border border-border bg-surface overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h2 className="text-sm font-semibold">
+          Your roster <span className="text-muted">({state.user_team})</span>
+        </h2>
+        <span className="text-xs text-muted tabular-nums">
+          {picks.length} / {state.num_rounds}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+        <SlotList title="Starters" slots={starters} />
+        <SlotList title="Bench" slots={bench} />
+      </div>
+    </section>
+  );
+}
+
+function SlotList({
+  title,
+  slots,
+}: {
+  title: string;
+  slots: ReturnType<typeof buildRoster<Player>>;
+}) {
+  if (slots.length === 0) return null;
+  return (
+    <div>
+      <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-muted border-b border-border bg-surface-2/40">
+        {title}
+      </div>
+      <ul className="divide-y divide-border">
+        {slots.map((slot, i) => (
+          <li
+            key={`${slot.id}-${i}`}
+            className="flex items-center gap-3 px-4 py-2 text-sm"
+          >
+            <span className="w-12 shrink-0 text-[10px] font-semibold tracking-wider text-muted">
+              {slot.label}
+            </span>
+            {slot.player ? (
+              <>
+                <span
+                  className={`text-[10px] font-semibold tracking-wider px-1.5 py-0.5 rounded ${positionBadgeClass(slot.player.position)}`}
+                >
+                  {slot.player.position}
+                </span>
+                <span className="truncate flex-1">{slot.player.name}</span>
+                <span className="text-xs text-muted shrink-0">
+                  {slot.player.team ?? "FA"}
+                </span>
+              </>
+            ) : (
+              <span className="text-muted/60 italic">Empty</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

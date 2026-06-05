@@ -100,26 +100,16 @@ export function isComplete(state: DraftState): boolean {
 }
 
 const STARTER_TARGETS: Record<string, number> = { QB: 1, RB: 2, WR: 3, TE: 1, K: 1, DST: 1 };
-const ROSTER_CAPS: Record<string, number> = { QB: 2, RB: 5, WR: 5, TE: 2, K: 1, DST: 1 };
-const PRIORITY = ["RB", "WR", "QB", "TE", "K", "DST"];
+const ROSTER_CAPS: Record<string, number> = { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DST: 1 };
 
-function rankAvailable(state: DraftState): Record<string, Player[]> {
-  const byPos: Record<string, Player[]> = {};
-  for (const pid of state.available) {
-    const p = state.players[pid];
-    (byPos[p.position] ??= []).push(p);
-  }
-  for (const list of Object.values(byPos)) {
-    list.sort((a, b) => {
-      const aAdp = a.adp ?? Number.POSITIVE_INFINITY;
-      const bAdp = b.adp ?? Number.POSITIVE_INFINITY;
-      if (aAdp !== bAdp) return aAdp - bAdp;
-      return a.name.localeCompare(b.name);
-    });
-  }
-  return byPos;
-}
-
+// ADP-driven CPU pick.
+//
+// 1. Score every available player as (-adp + need_bonus). Players with no ADP
+//    get a large penalty so they're only picked once ranked players run out.
+// 2. Drop players whose roster cap is already full, and gate K/DST until the
+//    last two rounds.
+// 3. Sample from the top N by score with a steep weighting so most picks are
+//    "BPA-ish" but the draft still varies run-to-run.
 export function cpuPick(state: DraftState, team: string): number {
   const roster = state.rosters[team] ?? [];
   const counts: Record<string, number> = {};
@@ -127,20 +117,65 @@ export function cpuPick(state: DraftState, team: string): number {
     const pos = state.players[pid].position;
     counts[pos] = (counts[pos] ?? 0) + 1;
   }
-  const byPos = rankAvailable(state);
   const round = Math.floor(state.picks.length / state.num_teams) + 1;
+  const currentPickOverall = state.picks.length + 1;
 
-  const needs = PRIORITY.filter((pos) => (counts[pos] ?? 0) < (STARTER_TARGETS[pos] ?? 0));
-  const candidates = needs.length > 0 ? needs : PRIORITY.filter((pos) => (counts[pos] ?? 0) < (ROSTER_CAPS[pos] ?? 0));
+  type Scored = { pid: number; score: number };
+  const scored: Scored[] = [];
+  let fallback: number | null = null;
 
-  for (const pos of candidates) {
+  for (const pid of state.available) {
+    const p = state.players[pid];
+    if (fallback === null) fallback = pid;
+
+    const pos = p.position;
+    const have = counts[pos] ?? 0;
+    const cap = ROSTER_CAPS[pos] ?? 99;
+    if (have >= cap) continue;
+
+    // Don't draft K/DST before the last two rounds.
     if ((pos === "K" || pos === "DST") && round < state.num_rounds - 1) continue;
-    const pool = byPos[pos];
-    if (!pool || pool.length === 0) continue;
-    const top = pool.slice(0, Math.min(5, pool.length));
-    return top[Math.floor(Math.random() * top.length)].player_id;
+
+    const adp = p.adp ?? 9999;
+    // Base value: how far ahead of ADP we'd be reaching (negative = good value).
+    let score = -adp;
+
+    // Positional need bonus shrinks as starters fill.
+    const target = STARTER_TARGETS[pos] ?? 0;
+    if (have < target) {
+      // Bigger bonus for the more under-filled positions.
+      score += (target - have) * 8;
+    } else if (have >= target && (pos === "QB" || pos === "TE")) {
+      // Strongly discourage stacking a second QB/TE before bench depth.
+      score -= 40;
+    }
+
+    // Mild reach penalty: if a player's ADP is far past the current pick, don't
+    // grab them just because they fit a need.
+    if (adp > currentPickOverall + 24) {
+      score -= (adp - currentPickOverall - 24) * 0.5;
+    }
+
+    scored.push({ pid, score });
   }
 
-  for (const pid of state.available) return pid;
-  throw new Error("no players available");
+  if (scored.length === 0) {
+    if (fallback === null) throw new Error("no players available");
+    return fallback;
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+
+  // Weighted random among the top candidates so identical states don't always
+  // produce identical drafts. Weights drop off geometrically.
+  const topN = Math.min(5, scored.length);
+  const top = scored.slice(0, topN);
+  const weights = top.map((_, i) => Math.pow(0.55, i));
+  const totalWeight = weights.reduce((s, w) => s + w, 0);
+  let r = Math.random() * totalWeight;
+  for (let i = 0; i < top.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return top[i].pid;
+  }
+  return top[0].pid;
 }
