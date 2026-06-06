@@ -9,16 +9,18 @@ type Mode = "signin" | "signup";
 export default function AuthForm({
   initialMode,
   next,
+  initialError,
 }: {
   initialMode: Mode;
   next: string;
+  initialError?: string | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [info, setInfo] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -37,7 +39,13 @@ export default function AuthForm({
       router.push(next);
       router.refresh();
     } else {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        },
+      });
       if (error) {
         setError(error.message);
         setBusy(false);

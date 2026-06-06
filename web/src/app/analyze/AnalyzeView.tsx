@@ -165,6 +165,10 @@ function DraftCard({ draft, playerMap }: { draft: SavedDraft; playerMap: PlayerM
 
   return (
     <li className="rounded-xl border border-border bg-surface overflow-hidden">
+      <a
+        href={`/analyze/${draft.id}`}
+        className="block hover:bg-surface-2/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30"
+      >
       <div className="px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2 flex-wrap">
           <span
@@ -193,6 +197,7 @@ function DraftCard({ draft, playerMap }: { draft: SavedDraft; playerMap: PlayerM
         <SlotColumn title="Starters" slots={starters} />
         <SlotColumn title="Bench" slots={bench} />
       </div>
+      </a>
     </li>
   );
 }
