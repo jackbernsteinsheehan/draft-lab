@@ -4,6 +4,9 @@ from typing import Callable, Iterable, Iterator, Optional
 import nflreadpy as nfl
 import pandas as pd
 
+'''
+==== Functionality for running a mock draft. Player and DraftBoard classes, helper functions ====
+'''
 
 @dataclass(frozen=True, slots=True)
 class Player:
