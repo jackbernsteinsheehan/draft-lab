@@ -1,24 +1,21 @@
--- Draft Lab — consolidated schema.
+-- Draft Lab schema: players, player_external_ids, player_rankings, drafts, and
+-- their RLS policies. No seed or demo data. Everything uses IF NOT EXISTS /
+-- DROP ... IF EXISTS, so it's safe to re-run against an existing database.
 --
--- Single, idempotent, re-runnable DDL script for the full schema (players,
--- player_external_ids, drafts, player_rankings) plus RLS. Contains no seed or
--- demo data. Safe to run repeatedly.
---
--- To hard-reset first, uncomment the TEARDOWN block below (or run
--- `supabase db reset`, which drops the database and replays this migration).
+-- To rebuild from scratch, uncomment the teardown block below, or run
+-- `supabase db reset` to drop the database and replay this file.
 
--- ─────────────────────────────────────────────────────────── TEARDOWN (opt) ──
+-- Teardown (optional):
 -- DROP TABLE IF EXISTS drafts CASCADE;
 -- DROP TABLE IF EXISTS player_rankings CASCADE;
 -- DROP TABLE IF EXISTS player_external_ids CASCADE;
 -- DROP TABLE IF EXISTS players CASCADE;
 -- DROP FUNCTION IF EXISTS set_updated_at() CASCADE;
 
--- ──────────────────────────────────────────────────────────────── EXTENSIONS ──
--- gen_random_uuid() for drafts.id.
+-- Extensions: gen_random_uuid() for drafts.id.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- ───────────────────────────────────────────────────────── SHARED FUNCTIONS ──
+-- Shared updated_at trigger function.
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -27,7 +24,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ──────────────────────────────────────────────────────────────────── PLAYERS ──
 -- Canonical player identities. Translated from src/db/sql.py (MySQL) to Postgres.
 CREATE TABLE IF NOT EXISTS players (
     player_id        BIGSERIAL PRIMARY KEY,
@@ -89,8 +85,7 @@ CREATE POLICY "player_external_ids are public read"
     ON player_external_ids FOR SELECT
     USING (true);
 
--- ─────────────────────────────────────────────────────────── PLAYER RANKINGS ──
--- ECR/ADP snapshots, sourced from FantasyPros via nflverse
+-- Player rankings: ECR/ADP snapshots, sourced from FantasyPros via nflverse
 -- (`nflreadpy.load_ff_rankings`). Re-runnable: seeders upsert on
 -- (player_id, source, scoring, ecr_type, season).
 CREATE TABLE IF NOT EXISTS player_rankings (
@@ -131,8 +126,7 @@ CREATE POLICY "player_rankings are public read"
     ON player_rankings FOR SELECT
     USING (true);
 
--- ──────────────────────────────────────────────────────────────────── DRAFTS ──
--- A saved mock draft for an authenticated user.
+-- Drafts: a saved mock draft for an authenticated user.
 CREATE TABLE IF NOT EXISTS drafts (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id       UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,

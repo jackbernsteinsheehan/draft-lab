@@ -1,97 +1,71 @@
-# Draft Lab — First Release Plan
+# First release plan
 
-**Architecture (locked):** Next.js 16 on Vercel → Supabase directly via
-`@supabase/ssr`. No application server. The mock-draft engine and strategy
-classifier run in the browser. Python seed scripts run only in CI (GitHub
-Action), never in the request path.
+Next.js 16 on Vercel talking to Supabase directly through `@supabase/ssr`, no
+application server. The mock-draft engine and strategy classifier run in the
+browser; the Python seed scripts only ever run in CI, never in the request path.
+Hosting is Vercel, data seeding is automated with a GitHub Action.
 
-**Decisions:**
-- Hosting: **Vercel**.
-- Data seeding: **automated via GitHub Action**.
-- Audience: shipping privately is cheap; the "public / LinkedIn-worthy" work is
-  scoped as an explicit delta in Phase 2 so it can be decided independently.
+## Getting it live
 
-Legend: `[ ]` todo · `[x]` done · **(you)** = needs your accounts / interactive
-login, cannot be done from the repo.
+Most of the remaining work here is account setup rather than code.
 
----
+Spin up a production Supabase project and apply the schema — `supabase link`
+then `supabase db push`, or paste `supabase/migrations/0001_init.sql` into the
+SQL editor. Then seed it once by hand so there's data to test against (the
+GitHub Action takes this over afterward):
 
-## Phase 0 — Baseline ship
+```bash
+# root .env: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY for the prod project
+python scripts/seed_supabase.py
+python scripts/seed_rankings.py
+```
 
-Gets the app live and working end-to-end. Not yet public-facing quality.
+Deploy the `web/` directory to Vercel with `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` set. The one easy-to-miss step: in Supabase
+under Auth → URL Configuration, add the Vercel production URL to the redirect
+allowlist and set the Site URL, otherwise `/auth/callback` breaks in prod.
 
-Repo-side (done in this pass):
-- [x] Remove stale `DB_PASSWORD` from `web/.env.local.example`.
-- [x] Rewrite `README.md` to the shipped Supabase / no-server architecture.
-- [x] Confirm production build is clean (`npm run build` → exit 0, all routes render).
+Then walk the whole flow to confirm it holds together: guest draft → sign up →
+save → analyze.
 
-Account-side **(you)**:
-- [ ] Create a production Supabase project (pick a region close to you).
-- [ ] Apply migrations: `supabase link` to the project, then `supabase db push`
-      (or paste `supabase/migrations/*.sql` into the SQL editor in order).
-- [ ] Seed once, manually, so there's data to smoke-test (Phase 1 automates this):
-      ```bash
-      # root .env: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY for the PROD project
-      python scripts/seed_supabase.py
-      python scripts/seed_rankings.py
-      ```
-- [ ] Create the Vercel project from the `web/` directory. Set env vars:
-      `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- [ ] **Supabase → Auth → URL Configuration:** add the Vercel production URL (and
-      preview URL if used) to **Redirect URLs**, and set **Site URL**. Without
-      this, `/auth/callback` fails in production — easiest step to forget.
-- [ ] Smoke test the full flow: guest draft → sign up → save → `/analyze`.
+The repo-side prep is already done — the stale `DB_PASSWORD` is out of the env
+example, the README reflects the real architecture, and the production build is
+clean.
 
-## Phase 1 — Automated seeding (GitHub Action)
+## Automated seeding
 
-- [ ] Add `requirements.txt` (or `pyproject.toml`) for the pipeline — there is no
-      dependency manifest today, so CI can't install. Pin: `nflreadpy`, `pandas`,
-      `supabase`, `python-dotenv` (+ anything `src/data/fetch_data.py` imports).
-- [ ] Workflow `.github/workflows/seed.yml`:
-  - Triggers: `schedule` (cron) + `workflow_dispatch` (manual run button).
-  - Steps: checkout → setup-python → install deps → run both seed scripts.
-  - Secrets (repo settings): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. The
-    service-role key lives **only** here — never in Vercel or the client bundle.
-  - Upserts are already idempotent, so re-runs are safe.
-- [ ] Cadence: daily through draft season (August), weekly otherwise.
+The pipeline has no dependency manifest yet, so the first step is a
+`requirements.txt` (`nflreadpy`, `pandas`, `supabase`, `python-dotenv`, plus
+whatever `src/data/fetch_data.py` pulls in) — CI can't install without it.
 
-## Phase 2 — Public / LinkedIn-mentionable delta
+From there, a `.github/workflows/seed.yml` that runs on a schedule with a
+`workflow_dispatch` manual trigger: checkout, set up Python, install, run both
+seed scripts. `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` live in the repo
+secrets and nowhere else — the service-role key never touches Vercel or the
+client bundle. The upserts are idempotent so re-runs are harmless. Daily through
+August, weekly the rest of the year.
 
-Baseline + Phase 1 = a working private app. To make it usable by a stranger and
-worth linking publicly, the incremental work is:
+## Making it public
 
-**Must-have for public (~1 day)**
-- [ ] Auth flow completeness: enable email confirmation, add password reset, and
-      real error/empty states in `web/src/app/auth/`. Optional: magic-link to cut
-      signup friction. (Today it's a bare email form — fine for you, rough for
-      strangers.)
-- [ ] RLS audit: verify `drafts` owner policies hold, reference tables are
-      read-only, and no service-role key can reach the browser bundle.
-- [ ] OG / meta tags + favicon + descriptive `<title>` in `web/src/app/layout.tsx`
-      (currently `title: "draft-lab"`, generic description). This is what makes a
-      shared link render a real preview card on LinkedIn. Highest visibility per
-      unit effort.
-- [ ] Mobile pass on the draft room (dense layout; recruiters click from phones).
+Shipping this privately is nearly free once the steps above are done. Turning it
+into something worth linking publicly is the part that takes real time.
 
-**Nice-to-have polish (~1 day, optional)**
-- [ ] Short "How it works" section surfacing the strategy classifier — the actual
-      differentiator.
-- [ ] Confirm the existing "analytics" work is wired, or add lightweight page
-      analytics.
-- [ ] Seed a public demo draft so `/analyze` isn't empty before signup.
+The things that actually matter before strangers use it: fleshing out the auth
+flow (email confirmation, password reset, real error and empty states in
+`web/src/app/auth/` — maybe magic-link to cut signup friction, since right now
+it's a bare email form); a pass over RLS to confirm the `drafts` owner policies
+hold, the reference tables stay read-only, and no service-role key leaks into
+the client; OG/meta tags, a favicon, and a real `<title>` in
+`web/src/app/layout.tsx` so a shared link renders a proper preview card; and a
+mobile pass on the draft room, which is dense.
 
-## Explicitly deferred to v2
+Beyond that, some polish if there's time: a short "how it works" section that
+puts the strategy classifier front and center since it's the differentiator,
+confirming the analytics wiring, and seeding a public demo draft so `/analyze`
+isn't empty before signup.
 
-- Projected point totals / scoring simulation (README's original roadmap).
-- Cross-run strategy comparison and richer analytics.
-- Rate limiting (Supabase defaults are sufficient at portfolio scale).
+## Later
 
----
-
-## Effort summary
-
-| Scope | Effort | Result |
-|-------|--------|--------|
-| Phase 0 + 1 | ~1 day | Live private app, data auto-refreshing |
-| + Phase 2 must-haves | +~1 day | Public-ready, shareable |
-| + Phase 2 polish | +~1 day | Portfolio-grade |
+Projected point totals and scoring simulation, cross-run strategy comparison and
+richer analytics, and rate limiting all wait for a second pass — the Supabase
+defaults are fine at this scale.

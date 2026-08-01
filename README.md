@@ -60,5 +60,4 @@ In production these run on a schedule via GitHub Actions.
 
 ## Release
 
-See [`docs/release_plan.md`](docs/release_plan.md) for the first-release plan and
-deployment checklist.
+See [`docs/release_plan.md`](docs/release_plan.md) for the first-release plan.
