@@ -1,5 +1,6 @@
 # Runtime deps for the data seeders (scripts/seed_supabase.py, seed_rankings.py).
 nflreadpy>=0.1.5
 pandas>=2.2
+pyarrow>=17  # required by polars .to_pandas() in nflreadpy; not pulled in transitively
 supabase>=2.30
 python-dotenv>=1.0
