@@ -12,6 +12,16 @@ export type DetailPick = {
   adp: number | null;
 };
 
+export type BoardPick = {
+  overall: number;
+  round: number;
+  slot: number;
+  team: string;
+  isUser: boolean;
+  name: string;
+  position: string;
+};
+
 export type DetailDraft = {
   id: string;
   num_teams: number;
@@ -35,9 +45,11 @@ function valueOf(pick: DetailPick): number | null {
 export default function DraftDetail({
   draft,
   picks,
+  board,
 }: {
   draft: DetailDraft;
   picks: DetailPick[];
+  board: BoardPick[];
 }) {
   const slots = buildRoster(picks, draft.num_rounds);
   const starters = slots.filter((s) => !s.isBench);
@@ -136,6 +148,13 @@ export default function DraftDetail({
         </table>
       </section>
 
+      <DraftBoard
+        board={board}
+        numTeams={draft.num_teams}
+        numRounds={draft.num_rounds}
+        userSlot={draft.user_slot}
+      />
+
       <section className="rounded-xl border border-border bg-surface overflow-hidden">
         <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
           <SlotColumn title="Starters" slots={starters} />
@@ -176,6 +195,91 @@ function ValueBadge({ value }: { value: number | null }) {
     <span className="text-xs text-muted tabular-nums">
       {value > 0 ? `+${value}` : value}
     </span>
+  );
+}
+
+// Full snake-draft board: one row per round, one column per team slot, so the
+// draft can be reviewed round by round with the user's picks highlighted.
+function DraftBoard({
+  board,
+  numTeams,
+  numRounds,
+  userSlot,
+}: {
+  board: BoardPick[];
+  numTeams: number;
+  numRounds: number;
+  userSlot: number;
+}) {
+  if (board.length === 0) return null;
+
+  // Index picks by "round-slot" for O(1) cell lookup.
+  const byCell = new Map<string, BoardPick>();
+  for (const p of board) byCell.set(`${p.round}-${p.slot}`, p);
+
+  const slots = Array.from({ length: numTeams }, (_, i) => i + 1);
+  const rounds = Array.from({ length: numRounds }, (_, i) => i + 1);
+
+  return (
+    <section className="rounded-xl border border-border bg-surface overflow-hidden">
+      <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-muted border-b border-border bg-surface-2/40">
+        Draft board · round by round
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wider text-muted">
+              <th className="sticky left-0 z-10 bg-surface px-2 py-2 text-left font-semibold">
+                Rd
+              </th>
+              {slots.map((s) => (
+                <th
+                  key={s}
+                  className={`px-2 py-2 font-semibold text-center min-w-[7rem] ${
+                    s === userSlot ? "text-foreground" : ""
+                  }`}
+                >
+                  {s === userSlot ? "You" : s}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rounds.map((r) => (
+              <tr key={r}>
+                <td className="sticky left-0 z-10 bg-surface px-2 py-1.5 font-medium tabular-nums text-muted border-r border-border">
+                  {r}
+                </td>
+                {slots.map((s) => {
+                  const pick = byCell.get(`${r}-${s}`);
+                  return (
+                    <td
+                      key={s}
+                      className={`px-2 py-1.5 align-top ${
+                        pick?.isUser ? "bg-foreground/5 ring-1 ring-inset ring-foreground/20" : ""
+                      }`}
+                    >
+                      {pick ? (
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-semibold tracking-wider px-1 py-px rounded shrink-0 ${positionBadgeClass(pick.position)}`}
+                          >
+                            {pick.position}
+                          </span>
+                          <span className="truncate">{pick.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted/40">—</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

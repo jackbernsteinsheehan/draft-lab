@@ -25,7 +25,9 @@ from src.data.fetch_rankings import build_ranking_payloads  # noqa: E402
 
 SOURCE = "fantasypros"
 CHUNK_SIZE = 500
-ON_CONFLICT = "player_id,source,scoring,ecr_type,season"
+# Includes scrape_date so each day's snapshot accumulates as history; same-day
+# re-runs upsert onto the same row. Matches uq_player_rankings (migration 0002).
+ON_CONFLICT = "player_id,source,scoring,ecr_type,season,scrape_date"
 
 
 def _fetch_player_lookup(client) -> dict[tuple[str, str], list[dict]]:

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { loadAdpForPlayers } from "@/lib/adp-resolve";
-import DraftDetail, { type DetailDraft, type DetailPick } from "./DraftDetail";
+import DraftDetail, { type DetailDraft, type DetailPick, type BoardPick } from "./DraftDetail";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +107,22 @@ export default async function DraftDetailPage({
       };
     });
 
+  // Every pick, with names resolved, for the full round-by-round draft board.
+  const boardPicks: BoardPick[] = picks
+    .map((p) => {
+      const info = playerMap.get(p.player_id);
+      return {
+        overall: p.overall,
+        round: p.round,
+        slot: p.slot,
+        team: p.team,
+        isUser: p.team === draft.user_team,
+        name: info?.name ?? `#${p.player_id}`,
+        position: info?.position ?? "?",
+      };
+    })
+    .sort((a, b) => a.overall - b.overall);
+
   const detail: DetailDraft = {
     id: draft.id as string,
     num_teams: draft.num_teams as number,
@@ -117,5 +133,5 @@ export default async function DraftDetailPage({
     created_at: draft.created_at as string,
   };
 
-  return <DraftDetail draft={detail} picks={userPicks} />;
+  return <DraftDetail draft={detail} picks={userPicks} board={boardPicks} />;
 }

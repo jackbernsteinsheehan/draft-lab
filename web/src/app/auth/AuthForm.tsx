@@ -64,13 +64,13 @@ export default function AuthForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full max-w-sm space-y-5 rounded-xl border border-border bg-surface p-7 shadow-sm"
+      className="w-full max-w-md space-y-6 rounded-xl border border-border bg-surface p-8 md:p-10 shadow-sm"
     >
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">
+        <h1 className="text-2xl font-semibold tracking-tight">
           {mode === "signin" ? "Sign in" : "Create account"}
         </h1>
-        <p className="mt-1 text-xs text-muted">
+        <p className="mt-1 text-sm text-muted">
           {mode === "signin"
             ? "Welcome back. Sign in to save and analyze drafts."
             : "Save mock drafts and unlock strategy analysis."}
@@ -79,19 +79,19 @@ export default function AuthForm({
 
       <div className="space-y-3">
         <label className="block space-y-1">
-          <span className="text-xs font-medium text-muted">Email</span>
+          <span className="text-sm font-medium text-muted">Email</span>
           <input
             type="email"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
+            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
         </label>
 
         <label className="block space-y-1">
-          <span className="text-xs font-medium text-muted">Password</span>
+          <span className="text-sm font-medium text-muted">Password</span>
           <input
             type="password"
             required
@@ -99,7 +99,7 @@ export default function AuthForm({
             autoComplete={mode === "signin" ? "current-password" : "new-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
+            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
         </label>
       </div>

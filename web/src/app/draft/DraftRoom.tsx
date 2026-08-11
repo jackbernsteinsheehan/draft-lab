@@ -490,6 +490,12 @@ function StatusBar({
         )}
       </div>
       <div className="flex items-center gap-2">
+        <a
+          href="#roster"
+          className="text-sm px-3 py-1.5 rounded-md border border-border hover:bg-surface-2 transition"
+        >
+          View roster ↓
+        </a>
         {done && <SaveDraftButton state={state} />}
         <button
           onClick={onReset}
@@ -503,7 +509,11 @@ function StatusBar({
 }
 
 function Roster({ state }: { state: DraftState }) {
-  const picks = state.rosters[state.user_team]
+  const [team, setTeam] = useState(state.user_team);
+  // Fall back to the user's team if the selection ever goes stale (e.g. reset).
+  const activeTeam = state.rosters[team] ? team : state.user_team;
+
+  const picks = (state.rosters[activeTeam] ?? [])
     .map((pid) => state.players[pid])
     .filter(Boolean);
   const slots = buildRoster(picks, state.num_rounds);
@@ -511,10 +521,32 @@ function Roster({ state }: { state: DraftState }) {
   const bench = slots.filter((s) => s.isBench);
 
   return (
-    <section className="rounded-xl border border-border bg-surface overflow-hidden">
+    <section
+      id="roster"
+      className="rounded-xl border border-border bg-surface overflow-hidden scroll-mt-4"
+    >
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border overflow-x-auto scroll-thin">
+        {state.draft_order.map((t) => {
+          const isActive = t === activeTeam;
+          const isYou = t === state.user_team;
+          return (
+            <button
+              key={t}
+              onClick={() => setTeam(t)}
+              className={`shrink-0 text-xs px-2.5 py-1 rounded-md border transition ${
+                isActive
+                  ? "bg-foreground text-background border-foreground"
+                  : "border-border text-muted hover:bg-surface-2"
+              }`}
+            >
+              {isYou ? "You" : t}
+            </button>
+          );
+        })}
+      </div>
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h2 className="text-sm font-semibold">
-          Your roster <span className="text-muted">({state.user_team})</span>
+          {activeTeam === state.user_team ? "Your roster" : `${activeTeam}'s roster`}
         </h2>
         <span className="text-xs text-muted tabular-nums">
           {picks.length} / {state.num_rounds}

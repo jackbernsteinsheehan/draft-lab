@@ -17,6 +17,10 @@ PLAYER_DB_FIELDS = (
     "is_active",
 )
 
+# nflverse's stable player id, carried into `player_external_ids` (not `players`)
+# so player identity survives team changes. Kept out of PLAYER_DB_FIELDS.
+GSIS_COLUMNS = ("gsis_id",)
+
 NAME_COLUMNS = ("full_name", "player_name", "display_name", "name")
 TEAM_COLUMNS = ("team", "recent_team", "player_team")
 POSITION_COLUMNS = ("position", "position_group", "pos")
@@ -86,6 +90,7 @@ def _prepare_player_frame(rosters: pd.DataFrame) -> pd.DataFrame:
     position_col = _find_first_column(roster, POSITION_COLUMNS)
     jersey_col = _find_first_column(roster, JERSEY_COLUMNS)
     experience_col = _find_first_column(roster, EXPERIENCE_COLUMNS)
+    gsis_col = _find_first_column(roster, GSIS_COLUMNS)
 
     if name_col is None:
         raise ValueError("Could not find a player name column in roster data.")
@@ -114,6 +119,9 @@ def _prepare_player_frame(rosters: pd.DataFrame) -> pd.DataFrame:
     player_frame["is_active"] = (
         roster["status"].map(_clean_bool) if "status" in roster.columns else True
     )
+    player_frame["gsis_id"] = (
+        roster[gsis_col].astype("string").str.strip() if gsis_col else None
+    )
 
     player_frame = player_frame.dropna(subset=["canonical_name"])
     player_frame = player_frame[player_frame["canonical_name"].str.len() > 0]
@@ -135,9 +143,13 @@ def build_player_payloads(roster_year: int) -> list[dict]:
     """
     Build clean player payloads for `Connection.insert_player()` and
     `Connection.update_player_data()`.
+
+    Each payload also carries `gsis_id` (nflverse's stable id). It is NOT a
+    `players` column — the sync layer pops it off to maintain
+    `player_external_ids` and match players across team changes.
     """
     player_frame = fetch_player_table_source(roster_year)
-    payload_frame = player_frame.loc[:, PLAYER_DB_FIELDS].copy()
+    payload_frame = player_frame.loc[:, (*PLAYER_DB_FIELDS, "gsis_id")].copy()
 
     # Convert pandas missing values (NaN, <NA>, NaT) into Python None
     payload_frame = payload_frame.astype(object).where(pd.notna(payload_frame), None)

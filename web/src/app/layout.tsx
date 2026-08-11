@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "draft-lab",
+  title: "DraftLab",
   description: "Mock draft engine and analysis.",
 };
 
@@ -30,10 +30,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <header className="sticky top-0 z-30 backdrop-blur bg-background/80 border-b border-border">
-          <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-3">
-            <a href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-              <span className="inline-block size-2.5 rounded-full bg-blue-500" />
-              draft-lab
+          <div className="w-full flex items-center justify-between px-4 md:px-6 lg:px-8 py-3">
+            <a href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+              <span className="inline-block size-3 rounded-full bg-blue-500" />
+              DraftLab
             </a>
             <nav className="flex items-center gap-1 text-sm">
               <NavLink href="/draft" label="Draft" />

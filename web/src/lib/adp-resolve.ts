@@ -12,11 +12,14 @@ export async function loadAdpForPlayers(
   supabase: Supa,
   players: AdpPlayer[],
 ): Promise<Record<number, number>> {
+  // player_rankings now keeps history (one row per scrape_date), so order by the
+  // newest snapshot first and take the first value seen per player below.
   const { data: rankingRows } = await supabase
     .from("player_rankings")
     .select("player_id, adp, ecr")
     .eq("source", "fantasypros")
     .eq("scoring", "half")
+    .order("scrape_date", { ascending: false })
     .order("season", { ascending: false });
 
   const map: Record<number, number> = {};

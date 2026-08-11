@@ -46,11 +46,14 @@ export default async function DraftPage() {
   // Falls back to FFC if the rankings table is empty.
   // nflverse `ff_rankings` exposes ECR, not ADP. ECR serves as the CPU's
   // draft-order signal just as well — coalesce ADP → ECR.
+  // player_rankings keeps history (one row per scrape_date); newest snapshot
+  // first, then take the first value per player below.
   const { data: rankingRows } = await supabase
     .from("player_rankings")
     .select("player_id, adp, ecr")
     .eq("source", "fantasypros")
     .eq("scoring", "half")
+    .order("scrape_date", { ascending: false })
     .order("season", { ascending: false });
 
   const dbAdpMap: Record<number, number> = {};
