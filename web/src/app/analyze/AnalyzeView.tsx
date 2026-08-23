@@ -53,7 +53,8 @@ export default function AnalyzeView({
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Draft analysis</h1>
           <p className="mt-1 text-sm text-muted">
-            {drafts.length} saved {drafts.length === 1 ? "draft" : "drafts"}.
+            {drafts.length} saved {drafts.length === 1 ? "draft" : "drafts"}
+            {drafts.length > 0 ? " · tap a draft to see its analysis" : ""}.
           </p>
         </div>
         <a
