@@ -24,6 +24,35 @@ type AdpCoverage = {
   source: "fantasypros" | "ffc" | "none";
 };
 
+// The in-progress draft lives only in React state, so a refresh — or the
+// redirect to /auth when a guest signs in to save — would otherwise lose it.
+// We mirror it to localStorage and restore on mount. `saved` guards against
+// re-inserting the same draft when the component remounts after sign-in.
+const STORAGE_KEY = "draftlab:draft";
+type Persisted = { state: DraftState; saved: boolean };
+
+function loadPersisted(): Persisted | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Persisted;
+    return parsed?.state ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function persist(p: Persisted | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (p) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+    else window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* private mode / quota — persistence is best-effort */
+  }
+}
+
 export default function DraftRoom({
   players,
   adpCoverage,
@@ -31,17 +60,36 @@ export default function DraftRoom({
   players: Player[];
   adpCoverage?: AdpCoverage;
 }) {
-  const [state, setState] = useState<DraftState | null>(null);
+  // Restore a persisted draft (survives refresh and the sign-in redirect).
+  const [restored] = useState(loadPersisted);
+  const [state, setState] = useState<DraftState | null>(restored?.state ?? null);
+  const [saved, setSaved] = useState<boolean>(restored?.saved ?? false);
+
+  // Mirror every change to localStorage; clearing state clears the snapshot.
+  useEffect(() => {
+    persist(state ? { state, saved } : null);
+  }, [state, saved]);
+
+  const start = (cfg: Config) => {
+    setSaved(false);
+    setState(initDraft({ ...cfg, players }));
+  };
+  const reset = () => {
+    setSaved(false);
+    setState(null);
+  };
 
   if (!state)
-    return (
-      <Setup
-        players={players}
-        adpCoverage={adpCoverage}
-        onStart={(cfg) => setState(initDraft({ ...cfg, players }))}
-      />
-    );
-  return <LiveDraft state={state} setState={setState} onReset={() => setState(null)} />;
+    return <Setup players={players} adpCoverage={adpCoverage} onStart={start} />;
+  return (
+    <LiveDraft
+      state={state}
+      setState={setState}
+      onReset={reset}
+      saved={saved}
+      onSaved={() => setSaved(true)}
+    />
+  );
 }
 
 /* ──────────────────────────────────────────────────────────── Setup ─── */
@@ -186,42 +234,21 @@ function SlotPicker({
   );
 }
 
-/* ─────────────────────────────────────────────────────── Save button ── */
+/* ─────────────────────────────────────────────────────── Save status ── */
 
-function SaveDraftButton({ state }: { state: DraftState }) {
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
+type SaveStatusValue = "idle" | "saving" | "saved" | "needs-auth" | "error";
 
-  const onSave = async () => {
-    setStatus("saving");
-    setError(null);
-    const userPicks = state.picks.filter((p) => p.team === state.user_team);
-    const { primary, tags } = classifyStrategy(userPicks, state.players);
-    const supabase = createClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
-      setStatus("error");
-      setError("Sign in to save drafts.");
-      return;
-    }
-    const { error: insertError } = await supabase.from("drafts").insert({
-      user_id: auth.user.id,
-      num_teams: state.num_teams,
-      num_rounds: state.num_rounds,
-      user_slot: state.draft_order.indexOf(state.user_team) + 1,
-      user_team: state.user_team,
-      picks: state.picks,
-      strategy: primary,
-      strategy_tags: tags,
-    });
-    if (insertError) {
-      setStatus("error");
-      setError(insertError.message);
-      return;
-    }
-    setStatus("saved");
-  };
-
+// A completed draft saves itself (see useAutoSave). This just reflects the
+// outcome; the only user action left is signing in, or retrying a hard error.
+function SaveStatus({
+  status,
+  error,
+  onRetry,
+}: {
+  status: SaveStatusValue;
+  error: string | null;
+  onRetry: () => void;
+}) {
   if (status === "saved") {
     return (
       <a
@@ -232,16 +259,96 @@ function SaveDraftButton({ state }: { state: DraftState }) {
       </a>
     );
   }
+  if (status === "needs-auth") {
+    return (
+      <a
+        href="/auth?next=/draft&mode=signup"
+        className="text-sm px-3 py-1.5 rounded-md bg-foreground text-background hover:opacity-90 transition"
+      >
+        Sign in to save →
+      </a>
+    );
+  }
+  if (status === "error") {
+    return (
+      <button
+        onClick={onRetry}
+        title={error ?? undefined}
+        className="text-sm px-3 py-1.5 rounded-md border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300 hover:opacity-90 transition"
+      >
+        Save failed — retry
+      </button>
+    );
+  }
   return (
-    <button
-      onClick={onSave}
-      disabled={status === "saving"}
-      className="text-sm px-3 py-1.5 rounded-md bg-foreground text-background hover:opacity-90 transition disabled:opacity-50"
-      title={error ?? undefined}
-    >
-      {status === "saving" ? "Saving…" : status === "error" ? "Retry save" : "Save draft"}
-    </button>
+    <span className="text-sm px-3 py-1.5 text-muted">
+      {status === "saving" ? "Saving…" : "Saving draft…"}
+    </span>
   );
+}
+
+// Auto-saves a completed draft exactly once. A signed-out guest lands on
+// "needs-auth"; after they sign in and return to /draft the component remounts,
+// the persisted draft restores, and this fires again — now authenticated.
+function useAutoSave({
+  state,
+  done,
+  saved,
+  onSaved,
+}: {
+  state: DraftState;
+  done: boolean;
+  saved: boolean;
+  onSaved: () => void;
+}) {
+  // A restored draft may already be saved (remount after sign-in / refresh).
+  const [status, setStatus] = useState<SaveStatusValue>(saved ? "saved" : "idle");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Attempt only from a clean "idle" state so setStatus can't re-trigger us;
+    // `saved` short-circuits an already-persisted draft on remount.
+    if (!done || saved || status !== "idle") return;
+    let cancelled = false;
+
+    (async () => {
+      setStatus("saving");
+      setError(null);
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (!auth.user) {
+        setStatus("needs-auth");
+        return;
+      }
+      const userPicks = state.picks.filter((p) => p.team === state.user_team);
+      const { primary, tags } = classifyStrategy(userPicks, state.players);
+      const { error: insertError } = await supabase.from("drafts").insert({
+        user_id: auth.user.id,
+        num_teams: state.num_teams,
+        num_rounds: state.num_rounds,
+        user_slot: state.draft_order.indexOf(state.user_team) + 1,
+        user_team: state.user_team,
+        picks: state.picks,
+        strategy: primary,
+        strategy_tags: tags,
+      });
+      if (cancelled) return;
+      if (insertError) {
+        setError(insertError.message);
+        setStatus("error");
+        return;
+      }
+      onSaved();
+      setStatus("saved");
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state, done, saved, status, onSaved]);
+
+  return { status, error, retry: () => setStatus("idle") };
 }
 
 /* ─────────────────────────────────────────────────────── Live draft ─── */
@@ -250,10 +357,14 @@ function LiveDraft({
   state,
   setState,
   onReset,
+  saved,
+  onSaved,
 }: {
   state: DraftState;
   setState: (s: DraftState) => void;
   onReset: () => void;
+  saved: boolean;
+  onSaved: () => void;
 }) {
   const [filter, setFilter] = useState("");
   const [posFilter, setPosFilter] = useState<string>("ALL");
@@ -261,6 +372,8 @@ function LiveDraft({
   const slot = onClock(state);
   const userTurn = slot?.team === state.user_team;
   const done = isComplete(state);
+
+  const save = useAutoSave({ state, done, saved, onSaved });
 
   useEffect(() => {
     if (done || userTurn || !slot) return;
@@ -332,6 +445,9 @@ function LiveDraft({
         done={done}
         onReset={onReset}
         pickLabel={pickLabel}
+        saveNode={
+          <SaveStatus status={save.status} error={save.error} onRetry={save.retry} />
+        }
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
@@ -461,6 +577,7 @@ function StatusBar({
   done,
   onReset,
   pickLabel,
+  saveNode,
 }: {
   state: DraftState;
   slot: { overall: number; round: number; slot: number; team: string } | null;
@@ -468,6 +585,7 @@ function StatusBar({
   done: boolean;
   onReset: () => void;
   pickLabel: (s: { overall: number; round: number }) => string;
+  saveNode: React.ReactNode;
 }) {
   return (
     <header className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between flex-wrap gap-3">
@@ -496,7 +614,7 @@ function StatusBar({
         >
           View roster ↓
         </a>
-        {done && <SaveDraftButton state={state} />}
+        {done && saveNode}
         <button
           onClick={onReset}
           className="text-sm px-3 py-1.5 rounded-md border border-border hover:bg-surface-2 transition"
