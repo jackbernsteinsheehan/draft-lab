@@ -30,9 +30,7 @@ export default async function Home() {
           <span className="text-muted">Analyze every pick.</span>
         </h1>
         <p className="mt-6 text-muted max-w-xl mx-auto">
-          Run mock drafts against ADP-driven CPUs, then classify your roster
-          construction strategy to see what you actually drafted vs. what you
-          intended.
+          Run mock drafts against ADP-driven CPUs, then classify your draft strategy. 
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           <a
@@ -61,8 +59,8 @@ export default async function Home() {
 
       <section className="max-w-5xl mx-auto px-6 pb-20 grid sm:grid-cols-3 gap-4">
         <Feature title="ADP-driven CPUs" body="Picks use live half-PPR ADP from FFC with positional need bias and weighted variance." />
-        <Feature title="Strategy classifier" body="Zero RB, Robust RB, WR Heavy, Early QB/TE — labeled automatically." />
-        <Feature title="Save & compare" body="Persist every draft and review your build patterns across runs." />
+        <Feature title="Strategy classifier" body="Zero RB, RB Heavy, WR Heavy, Early QB/TE, etc" />
+        <Feature title="Save & compare" body="Save every draft and analyze your strategies." />
       </section>
     </main>
   );
