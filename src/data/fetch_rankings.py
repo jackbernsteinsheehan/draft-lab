@@ -3,9 +3,13 @@
 The nflverse `ff_rankings` table is a flat snapshot of FantasyPros' published
 rankings. As of 2026 the relevant columns are:
 
-    player, pos, team, ecr, best, worst, sd, page_type, ecr_type, scrape_date
+    id, player, pos, team, ecr, best, worst, sd, page_type, ecr_type, scrape_date
 
-There is no `adp` and no `season`; we infer season from `scrape_date`. The
+`id` is the FantasyPros player id; we carry it through as `fantasypros_id` so the
+seeder can resolve players by id (via nflverse `ff_playerids`, whose
+`fantasypros_id -> gsis_id` crosswalk chains to our `player_external_ids`)
+instead of relying on name matching. There is no `adp` and no `season`; we infer
+season from `scrape_date`. The
 `ecr_type` column uses two-letter codes that fan out by scoring/format:
 
     ro  = redraft overall (default — used as half-PPR-equivalent)
@@ -23,8 +27,35 @@ Public entry point: `build_ranking_payloads(scoring='half', page_type='redraft-o
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import nflreadpy as nfl
 import pandas as pd
+
+# When DRAFTLAB_OFFLINE_DIR points at a directory (see scripts/cache_offline.py),
+# the nflverse frames are read from parquet on disk instead of the network. This
+# is what lets the pipeline run with no connectivity (e.g. on a plane).
+OFFLINE_ENV = "DRAFTLAB_OFFLINE_DIR"
+
+
+def offline_frame(name: str) -> pd.DataFrame | None:
+    """Read `{name}.parquet` from the offline dir, or None if offline is off.
+
+    If offline is on but the file is missing we raise rather than silently fall
+    back to the network — the whole point offline is to *not* touch the network.
+    """
+    d = os.getenv(OFFLINE_ENV)
+    if not d:
+        return None
+    path = Path(d) / f"{name}.parquet"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{OFFLINE_ENV} is set but {path} is missing; "
+            f"run `python scripts/cache_offline.py` once while online."
+        )
+    return pd.read_parquet(path)
+
 
 # Map our scoring label to FantasyPros' ecr_type code on redraft-overall.
 _SCORING_TO_ECR_TYPE = {
@@ -73,7 +104,20 @@ def _clean_float(v):
         return None
 
 
+def _clean_id(v):
+    """Normalize an external id to a comparable string (drop trailing .0, blanks)."""
+    if pd.isna(v):
+        return None
+    s = str(v).strip()
+    if s.endswith(".0"):
+        s = s[:-2]
+    return s or None
+
+
 def fetch_ff_rankings_frame() -> pd.DataFrame:
+    cached = offline_frame("ff_rankings")
+    if cached is not None:
+        return cached
     return nfl.load_ff_rankings().to_pandas()
 
 
@@ -125,6 +169,7 @@ def build_ranking_payloads(
     out["scrape_date"]  = (
         pd.to_datetime(df["scrape_date"], errors="coerce") if "scrape_date" in df else None
     )
+    out["fantasypros_id"] = df["id"].map(_clean_id) if "id" in df else None
 
     out["normalized_name"] = out["player_raw"].map(_normalize_name)
     out = out[out["normalized_name"].str.len() > 0]
@@ -141,6 +186,7 @@ def build_ranking_payloads(
                 "normalized_name": r["normalized_name"],
                 "position":        r["position"],
                 "team":            r["team"] if pd.notna(r["team"]) else None,
+                "fantasypros_id":  r["fantasypros_id"] if pd.notna(r["fantasypros_id"]) else None,
                 "scoring":         scoring,
                 "ecr_type":        ecr_type,
                 "season":          season,
