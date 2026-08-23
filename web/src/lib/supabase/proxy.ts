@@ -24,6 +24,14 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  const { error } = await supabase.auth.getUser();
+
+  // A stale/invalid refresh token cookie (e.g. after switching Supabase
+  // projects or the token being revoked) fails every request until cleared.
+  // Sign out to drop the bad auth cookies and treat the client as logged out.
+  if (error && (error.code === "refresh_token_not_found" || error.status === 400)) {
+    await supabase.auth.signOut({ scope: "local" });
+  }
+
   return response;
 }
