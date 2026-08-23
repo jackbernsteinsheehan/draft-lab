@@ -102,13 +102,27 @@ export function isComplete(state: DraftState): boolean {
 const STARTER_TARGETS: Record<string, number> = { QB: 1, RB: 2, WR: 3, TE: 1, K: 1, DST: 1 };
 const ROSTER_CAPS: Record<string, number> = { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DST: 1 };
 
+// How many picks happen before `team` is on the clock again (snake order).
+// Used to judge which positions will be picked clean before our next turn.
+function picksUntilNextTurn(state: DraftState, team: string, currentOverall: number): number {
+  const order = snakeOrder(state.draft_order, state.num_rounds);
+  for (const s of order) {
+    if (s.overall > currentOverall && s.team === team) return s.overall - currentOverall;
+  }
+  // No further pick this draft — use a wide horizon so nothing looks urgent.
+  return state.num_teams * 2;
+}
+
 // ADP-driven CPU pick.
 //
-// 1. Score every available player as (-adp + need_bonus). Players with no ADP
-//    get a large penalty so they're only picked once ranked players run out.
-// 2. Drop players whose roster cap is already full, and gate K/DST until the
+// 1. Score every available player as (-adp + need_bonus + scarcity). Players
+//    with no ADP get a large penalty so they're only picked once ranked
+//    players run out.
+// 2. Scarcity (VONA): reward players who sit ahead of a positional cliff —
+//    i.e. the value that would be gone at their position by our next pick.
+// 3. Drop players whose roster cap is already full, and gate K/DST until the
 //    last two rounds.
-// 3. Sample from the top N by score with a steep weighting so most picks are
+// 4. Sample from the top N by score with a steep weighting so most picks are
 //    "BPA-ish" but the draft still varies run-to-run.
 export function cpuPick(state: DraftState, team: string): number {
   const roster = state.rosters[team] ?? [];
@@ -119,6 +133,23 @@ export function cpuPick(state: DraftState, team: string): number {
   }
   const round = Math.floor(state.picks.length / state.num_teams) + 1;
   const currentPickOverall = state.picks.length + 1;
+
+  // Scarcity horizon: the ADP of the best player at each position expected to
+  // still be available at our next pick. A large gap between a player and this
+  // "survivor" means a cliff — take the player now rather than wait.
+  const horizon = currentPickOverall + picksUntilNextTurn(state, team, currentPickOverall);
+  const survivorAdpByPos: Record<string, number> = {};
+  {
+    const adpsByPos: Record<string, number[]> = {};
+    for (const pid of state.available) {
+      const p = state.players[pid];
+      (adpsByPos[p.position] ??= []).push(p.adp ?? 9999);
+    }
+    for (const pos in adpsByPos) {
+      const adps = adpsByPos[pos].sort((a, b) => a - b);
+      survivorAdpByPos[pos] = adps.find((a) => a > horizon) ?? adps[adps.length - 1];
+    }
+  }
 
   type Scored = { pid: number; score: number };
   const scored: Scored[] = [];
@@ -149,6 +180,12 @@ export function cpuPick(state: DraftState, team: string): number {
       // Strongly discourage stacking a second QB/TE before bench depth.
       score -= 40;
     }
+
+    // Scarcity (VONA): how much better this player is than the one at his
+    // position we could still get at our next pick. Rewards grabbing the last
+    // player before a positional cliff; ~0 for deep positions we can wait on.
+    const survivorAdp = survivorAdpByPos[pos] ?? adp;
+    score += Math.max(0, survivorAdp - adp) * 0.4;
 
     // Mild reach penalty: if a player's ADP is far past the current pick, don't
     // grab them just because they fit a need.
