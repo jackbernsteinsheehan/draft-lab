@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   cpuPick,
   initDraft,
@@ -37,7 +37,23 @@ function loadPersisted(): Persisted | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Persisted;
-    return parsed?.state ? parsed : null;
+    if (!parsed?.state) return null;
+    // `available` is a Set, which JSON serializes as an array; revive it.
+    const s = parsed.state;
+    const a = s.available as unknown;
+    if (Array.isArray(a)) {
+      s.available = new Set<number>(a);
+    } else {
+      // Recover drafts saved before Sets were serialized properly (`{}`):
+      // rebuild the pool as every player not yet picked.
+      const picked = new Set(s.picks.map((p) => p.player_id));
+      s.available = new Set(
+        Object.keys(s.players)
+          .map(Number)
+          .filter((id) => !picked.has(id)),
+      );
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -46,8 +62,15 @@ function loadPersisted(): Persisted | null {
 function persist(p: Persisted | null) {
   if (typeof window === "undefined") return;
   try {
-    if (p) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
-    else window.localStorage.removeItem(STORAGE_KEY);
+    if (p) {
+      // A Set stringifies to {}, losing its contents — store it as an array.
+      const json = JSON.stringify(p, (_key, value) =>
+        value instanceof Set ? [...value] : value,
+      );
+      window.localStorage.setItem(STORAGE_KEY, json);
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
   } catch {
     /* private mode / quota — persistence is best-effort */
   }
@@ -65,6 +88,12 @@ export default function DraftRoom({
   const [state, setState] = useState<DraftState | null>(restored?.state ?? null);
   const [saved, setSaved] = useState<boolean>(restored?.saved ?? false);
 
+  // The server has no localStorage, so it always renders <Setup>. Match that
+  // on the first client render to avoid a hydration mismatch, then reveal any
+  // restored draft once mounted.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Mirror every change to localStorage; clearing state clears the snapshot.
   useEffect(() => {
     persist(state ? { state, saved } : null);
@@ -79,7 +108,7 @@ export default function DraftRoom({
     setState(null);
   };
 
-  if (!state)
+  if (!mounted || !state)
     return <Setup players={players} adpCoverage={adpCoverage} onStart={start} />;
   return (
     <LiveDraft
@@ -304,11 +333,18 @@ function useAutoSave({
   // A restored draft may already be saved (remount after sign-in / refresh).
   const [status, setStatus] = useState<SaveStatusValue>(saved ? "saved" : "idle");
   const [error, setError] = useState<string | null>(null);
+  // Retries bump this counter to re-run the save without depending on `status`
+  // (which the effect sets itself, so it must stay out of the dep array).
+  const [attempt, setAttempt] = useState(0);
+
+  // Keep the latest onSaved without making it a dependency — the parent passes
+  // a fresh closure each render, which would otherwise re-run and cancel us.
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
 
   useEffect(() => {
-    // Attempt only from a clean "idle" state so setStatus can't re-trigger us;
     // `saved` short-circuits an already-persisted draft on remount.
-    if (!done || saved || status !== "idle") return;
+    if (!done || saved) return;
     let cancelled = false;
 
     (async () => {
@@ -339,16 +375,23 @@ function useAutoSave({
         setStatus("error");
         return;
       }
-      onSaved();
+      onSavedRef.current();
       setStatus("saved");
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [state, done, saved, status, onSaved]);
+  }, [state, done, saved, attempt]);
 
-  return { status, error, retry: () => setStatus("idle") };
+  return {
+    status,
+    error,
+    retry: () => {
+      setStatus("idle");
+      setAttempt((a) => a + 1);
+    },
+  };
 }
 
 /* ─────────────────────────────────────────────────────── Live draft ─── */
