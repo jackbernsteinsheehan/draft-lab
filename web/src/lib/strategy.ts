@@ -37,25 +37,18 @@ export function classifyStrategy(
   const firstFive = posByRound.filter((p) => p.round <= 5);
   const rbInFirstFive = firstFive.filter((p) => p.pos === "RB").length;
   const wrInFirstFive = firstFive.filter((p) => p.pos === "WR").length;
-  const firstPickPos = posByRound[0]?.pos;
 
   const tags: string[] = [];
 
   // RB construction
   if (rbInFirstFive === 0) {
     tags.push("Zero RB");
-  } else if (
-    firstPickPos === "RB" &&
-    posByRound.filter((p) => p.round >= 2 && p.round <= 5 && p.pos === "RB").length === 0
-  ) {
-    tags.push("Hero RB");
   } else if ((earlyCounts.RB ?? 0) >= 2) {
     tags.push("Robust RB");
   }
 
   // WR construction
   if ((earlyCounts.WR ?? 0) >= 2) tags.push("WR Heavy");
-  if (wrInFirstFive >= 4) tags.push("WR Hammer");
 
   // QB timing
   const qbRound = firstRoundByPos.QB;
@@ -65,7 +58,6 @@ export function classifyStrategy(
   // TE timing
   const teRound = firstRoundByPos.TE;
   if (teRound != null && teRound <= 4) tags.push("Early TE");
-  else if (teRound == null || teRound >= 10) tags.push("Streaming TE");
 
   // Balanced fallback: 1 RB + 1 WR in first 2 rounds and no extreme tag.
   const balancedShape =
@@ -75,7 +67,7 @@ export function classifyStrategy(
     (earlyCounts.WR ?? 0) <= 1;
   if (
     balancedShape &&
-    !tags.some((t) => ["Zero RB", "Robust RB", "Hero RB", "WR Heavy", "WR Hammer"].includes(t))
+    !tags.some((t) => ["Zero RB", "Robust RB", "WR Heavy"].includes(t))
   ) {
     tags.unshift("Balanced");
   }
@@ -84,8 +76,6 @@ export function classifyStrategy(
   const priority = [
     "Zero RB",
     "Robust RB",
-    "Hero RB",
-    "WR Hammer",
     "WR Heavy",
     "Balanced",
     "Early QB",
