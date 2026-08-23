@@ -61,7 +61,7 @@ export default async function Home() {
 
       <section className="max-w-5xl mx-auto px-6 pb-20 grid sm:grid-cols-3 gap-4">
         <Feature title="ADP-driven CPUs" body="Picks use live half-PPR ADP from FFC with positional need bias and weighted variance." />
-        <Feature title="Strategy classifier" body="Zero RB, Robust RB, Hero RB, WR Heavy, Early QB/TE — labeled automatically." />
+        <Feature title="Strategy classifier" body="Zero RB, Robust RB, WR Heavy, Early QB/TE — labeled automatically." />
         <Feature title="Save & compare" body="Persist every draft and review your build patterns across runs." />
       </section>
     </main>
